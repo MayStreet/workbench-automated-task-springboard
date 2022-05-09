@@ -39,8 +39,10 @@ here:
 (the file is also in this Springboard so you can easily just drop that in.)
 
 3. Copy the job URL as show in the above image, and then customise it to add in the filename inside the bucket; the
-command should look something like the following (with a different Job ID)
+command should look something like the following (with a different Job ID). Remember, if you need to get the URL then you can click the "copy" icon next to the name of the job in the Jobs view:
+
 ```
-curl -H 'Content-Type: application/json' -X POST --data '{ "jobId": "698db01b-ed95-45c7-b686-b018a7059ae6", "data": {"filename":"20-apr-2022.csv" } }' https://wb-api.shared-dev.maystreet.com/api/dask-jobs/trigger
+curl -H 'Content-Type: application/json' -X POST --data '{ "jobId": "<<UUID HERE>>", "data": {"filename":"20-apr-2022.csv" } }' https://wb-api.shared-dev.maystreet.com/api/dask-jobs/trigger
 ```
+
 4. Wait, and you should see the file being generated in the S3 repository.
