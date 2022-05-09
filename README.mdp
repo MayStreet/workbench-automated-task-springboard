@@ -16,9 +16,11 @@ request, retrieve a file from S3, run it against the Data Lake, and then write o
 
 1. You will need to create a Dask cluster before you can run this sample; to do so, please follow the short video
 here:
+
 ![images/provisioning-cluster.gif](/images/provisioning-cluster.gif)
 
 2. You will then need to create a simple web-triggered job using the cluster you've just created:
+
 ![images/creating-job.gif](/images/creating-job.gif)
 
 ## Running the job.
