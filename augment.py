@@ -1,5 +1,3 @@
-
-
 import os
 import logging
 import csv
@@ -8,9 +6,9 @@ from pathlib import Path
 from datetime import datetime, date, time
 
 import boto3
-import json
 
 import maystreet_data
+
 
 def get_data(feed, product, date_time):
     # UK/EU/everywhere else in the entire world date format
@@ -90,7 +88,8 @@ def run_process(file_name):
             try:
                 response_data = get_data(feed, product, date_time)
                 logging.info(response_data)
-                line_writer.writerow([product.upper(), feed.upper(), date_time, response_data['Ask'], response_data['Bid'], ''])
+                line_writer.writerow(
+                    [product.upper(), feed.upper(), date_time, response_data['Ask'], response_data['Bid'], ''])
             except Exception as ex:
                 line_writer.writerow([product.upper(), feed.upper(), date_time, '', '', str(ex)])
 

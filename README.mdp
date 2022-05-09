@@ -23,6 +23,10 @@ here:
 
 ![images/creating-job.gif](/images/creating-job.gif)
 
+3. Your Job edit should look like the following:
+
+![job-config.png](/images/job-config.png)
+
 ## Running the job.
 
 1. Ensure you have updated the bucket ID, the access key and the secret key inside the _[augment.py](augment.py)_ file.
@@ -42,7 +46,30 @@ here:
 command should look something like the following (with a different Job ID). Remember, if you need to get the URL then you can click the "copy" icon next to the name of the job in the Jobs view:
 
 ```
-curl -H 'Content-Type: application/json' -X POST --data '{ "jobId": "<<UUID HERE>>", "data": {"filename":"20-apr-2022.csv" } }' https://wb-api.shared-dev.maystreet.com/api/dask-jobs/trigger
+curl -H 'Content-Type: application/json' -X POST --data '{ "jobId": "<<UUID HERE>>", "data": {"filename":"20-apr-2022.csv" } }' https://wb-api.maystreet.com/api/dask-jobs/trigger
 ```
 
 4. Wait, and you should see the file being generated in the S3 repository.
+
+## Web APIs to Query Status
+
+We offer a few APIs you can call to check the status of your executions.
+
+To use these, you will need an API token. Open the Command Palette inside Workbench and select "MST: New API Key". Answer the questions,
+and a new API key will be generated.
+
+Keep this safe and secure, as anyone with it will be able to query jobs.
+
+### Query all Executions
+
+```
+curl --location --request GET 'https://wb-api.maystreet.com/api/dask-jobs/my-executions' \
+--header 'Authorization: Bearer <<TOKEN>>'
+```
+
+### Query a Single Execution
+
+```
+curl --location --request GET 'https://wb-api.maystreet.maystreet.com/api/dask-jobs/my-executions/<<UUID of Execution>>' \
+--header 'Authorization: Bearer <<TOKEN>>'
+```
