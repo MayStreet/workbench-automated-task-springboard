@@ -1,98 +1,103 @@
-import os
-import logging
 import csv
-from tempfile import gettempdir
+import logging
+import os
+from datetime import date, datetime
 from pathlib import Path
-from datetime import datetime, date, time
+from tempfile import gettempdir
 
 import boto3
-
 import maystreet_data
 
+# Change these values to your bucket / AWS account.
+# Set AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY to None if the bucket is an Analytics Workbench shared resource.
+BUCKET_NAME = "<<BUCKET NAME>>"
+AWS_ACCESS_KEY_ID = "<<AWS_ACCESS_KEY_ID>>"
+AWS_SECRET_ACCESS_KEY = "<<AWS_SECRET_ACCESS_KEY>>"
 
-def get_data(feed, product, date_time):
-    # UK/EU/everywhere else in the entire world date format
-    parsed_date = datetime.strptime(date_time, '%d/%m/%Y')
 
+def get_max_price_by_side(feed: str, product: str, day: date):
     query_text = f"""
-    SELECT 
-        side, 
-        MAX(price) 
-    FROM 
+    SELECT
+        side,
+        MAX(price) AS max_price
+    FROM
         "prod_lake.p_mst_data_lake".mt_trade
-    WHERE 
+    WHERE
         f = '{feed}'
-        AND y = '{parsed_date.year}'
-        AND m = '{str(parsed_date.month).zfill(2)}'
-        AND d = '{str(parsed_date.day).zfill(2)}'
+        AND dt = '{day.isoformat()}'
         AND product = '{product}'
         AND side IS NOT NULL
-    GROUP BY 
+    GROUP BY
         side
     """
-
-    logging.debug(query_text)
 
     records_iter = maystreet_data.query(
         maystreet_data.DataSource.DATA_LAKE,
         query_text,
     )
 
-    return {
-        record['side']: record['EXPR$1']
-        for record in records_iter
-    }
+    return {record["side"]: record["max_price"] for record in records_iter}
 
 
-def run_process(file_name):
-    logging.info(f'using filename: {file_name}')
-
-    bucket_name = '<<BUCKET NAME>>'
-
-    temp_directory = gettempdir()
-
-    boto3.set_stream_logger('', logging.DEBUG)
+def run_process(source_remote_path):
+    logging.info(f"using remote path: {source_remote_path}")
 
     session = boto3.Session(
-        aws_access_key_id='<<AWS ACCESS KEY ID>>',
-        aws_secret_access_key='<<AWS SECRET ACCESS KEY>>',
-        region_name='us-east-1'
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name="us-east-1",
+    )
+    bucket = session.resource("s3").Bucket(BUCKET_NAME)
+
+    filename_path = Path(source_remote_path)
+    destination_remote_path = f"{filename_path.stem}-output{filename_path.suffix}"
+
+    temp_directory = gettempdir()
+    source_local_path = os.path.join(temp_directory, "s3-file.csv")
+    destination_local_path = os.path.join(temp_directory, destination_remote_path)
+
+    logging.info(f"downloading from {source_remote_path} to {source_local_path}...")
+    logging.info(
+        f"will upload from {destination_local_path} to {destination_remote_path}...",
     )
 
-    logging.info('created session... %s, %s', session.get_credentials(), session.region_name)
+    bucket.download_file(source_remote_path, source_local_path)
 
-    path = Path(file_name)
-    output_file_name = f"{path.stem}-output{path.suffix}"
+    with open(source_local_path) as source_csv, open(
+        destination_local_path, "w"
+    ) as destination_csv:
+        source_reader = csv.reader(source_csv)
+        destination_writer = csv.writer(destination_csv)
 
-    bucket_destination = os.path.join(temp_directory, 's3-file.csv')
-    output_file = os.path.join(temp_directory, output_file_name)
+        next(source_reader, None)  # skip header
 
-    logging.info("downloading from %s to %s...", file_name, bucket_destination)
-    logging.info("will upload from %s to %s...", output_file, output_file_name)
+        destination_writer.writerow(
+            ["Product", "Feed", "Date/Time", "Ask", "Bid", "Error"]
+        )
 
-    s3 = session.resource('s3')
-    s3.Bucket(bucket_name).download_file(file_name, bucket_destination)
+        for product, feed, csv_day in source_reader:
+            # dates in the CSV are in day/month/year format
+            day = datetime.strptime(csv_day, "%d/%m/%Y").date()
 
-    with open(bucket_destination) as csv_file, open(output_file, 'w') as csv_output_file:
-        line_writer = csv.writer(csv_output_file)
-        line_writer.writerow(['Product', 'Feed', 'Date/Time', 'Ask', 'Bid', 'Error'])
-        line_reader = csv.reader(csv_file)
-        next(line_reader, None)
-        for row in line_reader:
-            product = row[0]
-            feed = row[1]
-            date_time = row[2]
-
-            logging.info('getting data for %s on %s at %s...', product, feed, date_time)
+            logging.info(f"fetching prices for {product} on {feed} at {day}")
 
             try:
-                response_data = get_data(feed, product, date_time)
-                logging.info(response_data)
-                line_writer.writerow(
-                    [product.upper(), feed.upper(), date_time, response_data['Ask'], response_data['Bid'], ''])
+                prices = get_max_price_by_side(feed, product, day)
+                destination_writer.writerow(
+                    [
+                        product.upper(),
+                        feed.upper(),
+                        csv_day,
+                        prices["Ask"],
+                        prices["Bid"],
+                        "",
+                    ]
+                )
             except Exception as ex:
-                line_writer.writerow([product.upper(), feed.upper(), date_time, '', '', str(ex)])
+                destination_writer.writerow(
+                    [product.upper(), feed.upper(), csv_day, "", "", str(ex)]
+                )
 
-    s3.Bucket(bucket_name).upload_file(output_file, output_file_name)
+    bucket.upload_file(destination_local_path, destination_remote_path)
 
-    logging.info('done!')
+    logging.info("done!")
